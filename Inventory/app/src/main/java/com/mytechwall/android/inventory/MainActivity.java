@@ -1,21 +1,34 @@
 package com.mytechwall.android.inventory;
 
+import android.content.ContentUris;
 import android.content.ContentValues;
+import android.content.Intent;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Bundle;
+import android.support.design.widget.CoordinatorLayout;
 import android.support.design.widget.FloatingActionButton;
 import android.support.design.widget.Snackbar;
+import android.support.v4.app.LoaderManager;
+import android.support.v4.content.CursorLoader;
+import android.support.v4.content.Loader;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
 import android.view.View;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.widget.AdapterView;
+import android.widget.ListView;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import com.mytechwall.android.inventory.data.InventoryContract;
+import com.mytechwall.android.inventory.presenter.ItemAdapter;
 
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends AppCompatActivity implements LoaderManager.LoaderCallbacks<Cursor> {
+    private ItemAdapter adapter;
+    private CoordinatorLayout coordinatorlayout;
+    private ListView itemsList;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -28,17 +41,34 @@ public class MainActivity extends AppCompatActivity {
         fab.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                Snackbar.make(view, "Replace with your own action", Snackbar.LENGTH_LONG)
-                        .setAction("Action", null).show();
+                Intent intent = new Intent(MainActivity.this, EditorActivity.class);
+                startActivity(intent);
             }
         });
+
+        coordinatorlayout = (CoordinatorLayout) findViewById(R.id.coordinatorlayout);
+        itemsList = (ListView) findViewById(R.id.itemList);
+        itemsList.setOnItemClickListener(new AdapterView.OnItemClickListener() {
+            @Override
+            public void onItemClick(AdapterView<?> adapterView, View view, int i, long l) {
+                Intent intent = new Intent(getApplicationContext(), EditorActivity.class);
+                Uri sendUri = ContentUris.withAppendedId(InventoryContract.InventoryEntry.CONTENT_URI, l);
+                intent.setData(sendUri);
+                startActivity(intent);
+            }
+        });
+        adapter = new ItemAdapter(MainActivity.this, null);
+        itemsList.setAdapter(adapter);
+        getSupportLoaderManager().initLoader(0, null, this);
+        View emptyView = findViewById(R.id.empty_view);
+        itemsList.setEmptyView(emptyView);
 
     }
 
     @Override
     protected void onStart() {
         super.onStart();
-        displayDatabaseInfo();
+        // displayDatabaseInfo();
     }
 
     @Override
@@ -57,24 +87,13 @@ public class MainActivity extends AppCompatActivity {
 
         //noinspection SimplifiableIfStatement
         if (id == R.id.action_settings) {
-            insertItem();
+            deleteAllItems();
             return true;
         }
 
         return super.onOptionsItemSelected(item);
     }
 
-    private void insertItem() {
-        ContentValues values = new ContentValues();
-        values.put(InventoryContract.InventoryEntry.COLUMN_NAME, "CHERRY");
-        values.put(InventoryContract.InventoryEntry.COLUMN_QUANTITY, 3);
-        values.put(InventoryContract.InventoryEntry.COLUMN_SUPPLIER_CONTACT_EMAIL, "CHERRY@gmail.com");
-        values.put(InventoryContract.InventoryEntry.COLUMN_SUPPLIER_CONTACT_NUMBER, "8146530645");
-        values.put(InventoryContract.InventoryEntry.COLUMN_SUPPLIER_NAME, "Chimni");
-
-        Uri newRow = getContentResolver().insert(InventoryContract.InventoryEntry.CONTENT_URI, values);
-
-    }
 
     private void displayDatabaseInfo() {
 
@@ -94,12 +113,43 @@ public class MainActivity extends AppCompatActivity {
             cursor = getContentResolver().query(InventoryContract.InventoryEntry.CONTENT_URI, projection, null
                     , null, null, null);
         }
-        cursor.moveToFirst();
-        int nameColumnIndex = cursor.getColumnIndex(InventoryContract.InventoryEntry.COLUMN_NAME);
-        String currentName = cursor.getString(nameColumnIndex);
-        TextView name = (TextView) findViewById(R.id.hello);
-        name.setText(currentName);
-        name.append("The items table contains " + cursor.getCount() + " items.\n\n");
 
+
+    }
+
+    private void deleteAllItems() {
+        int rowsDeleted = getContentResolver().delete(InventoryContract.InventoryEntry.CONTENT_URI, null, null);
+        if (rowsDeleted != 0) {
+            Snackbar.make(coordinatorlayout, "Deleted succesfully", Snackbar.LENGTH_SHORT).show();
+        } else {
+            Snackbar.make(coordinatorlayout, "could not delete", Snackbar.LENGTH_SHORT).show();
+        }
+    }
+
+    @Override
+    public Loader<Cursor> onCreateLoader(int id, Bundle args) {
+        String[] projection = {
+                InventoryContract.InventoryEntry._ID,
+                InventoryContract.InventoryEntry.COLUMN_NAME,
+                InventoryContract.InventoryEntry.COLUMN_ITEM_IMAGE,
+                InventoryContract.InventoryEntry.COLUMN_SUPPLIER_CONTACT_NUMBER,
+                InventoryContract.InventoryEntry.COLUMN_SUPPLIER_CONTACT_EMAIL,
+                InventoryContract.InventoryEntry.COLUMN_QUANTITY,
+                InventoryContract.InventoryEntry.COLUMN_SUPPLIER_NAME
+
+        };
+        Uri baseUri = InventoryContract.InventoryEntry.CONTENT_URI;
+        return new CursorLoader(getApplicationContext(), baseUri, projection, null, null, null);
+    }
+
+    @Override
+    public void onLoadFinished(Loader<Cursor> loader, Cursor data) {
+        adapter.swapCursor(data);
+
+    }
+
+    @Override
+    public void onLoaderReset(Loader<Cursor> loader) {
+        adapter.swapCursor(null);
     }
 }
